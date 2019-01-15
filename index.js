@@ -85,6 +85,7 @@ class Pool extends EventEmitter {
     this.options = Object.assign({}, options)
     this.options.max = this.options.max || this.options.poolSize || 10
     this.log = this.options.log || function () { }
+    this.errorlog = this.options.errorlog || function () { }
     this.Client = this.options.Client || Client || require('pg').Client
     this.Promise = this.options.Promise || global.Promise
 
@@ -209,6 +210,18 @@ class Pool extends EventEmitter {
   }
 
   newClient (pendingItem) {
+    //pick a host at random from hosts
+    if (this.options.hosts) {
+      const index = Math.floor(Math.random()*this.options.hosts.length);
+      const shost = this.options.hosts[index];
+      const split = shost.split(":");
+      const host = split[0];
+      const port = split[1];    
+      this.options.host = host;
+      this.options.port = port;
+      this.errorlog(`connecting to index: ${index}, host ${this.options.host}:${this.options.port}`);
+    }
+
     const client = new this.Client(this.options)
     this._clients.push(client)
     const idleListener = makeIdleListener(this, client)
@@ -240,13 +253,10 @@ class Pool extends EventEmitter {
         if (timeoutHit) {
           err.message = 'Connection terminated due to connection timeout'
         }
-
-        // this client won’t be released, so move on immediately
-        this._pulseQueue()
-
-        if (!pendingItem.timedOut) {
-          pendingItem.callback(err, undefined, NOOP)
-        }
+        
+        //retry on error
+        this.options.log("retrying")
+        this.newClient(pendingItem);
       } else {
         this.log('new client connected')
         client.release = release.bind(this, client)
