@@ -255,7 +255,7 @@ class Pool extends EventEmitter {
         }
         
         //retry on error
-        this.options.log("retrying")
+        this.log("retrying")
         this.newClient(pendingItem);
       } else {
         this.log('new client connected')
